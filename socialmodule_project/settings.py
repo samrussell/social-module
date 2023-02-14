@@ -45,6 +45,7 @@ INSTALLED_APPS = [
     'accounts.apps.AccountsConfig',
     'pages.apps.PagesConfig',
     'forum.apps.ForumConfig',
+    'emails.apps.EmailsConfig',
 ]
 
 MIDDLEWARE = [

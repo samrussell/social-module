@@ -8,7 +8,6 @@ from .forms import CustomUserCreationForm, CustomUserChangeForm
 
 CustomUser = get_user_model()
 
-
 class CustomUserAdmin(UserAdmin):
     add_form = CustomUserCreationForm
     form = CustomUserChangeForm

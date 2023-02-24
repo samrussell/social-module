@@ -1,10 +1,14 @@
 from django.contrib import admin
 from django.contrib.auth import get_user_model
 from django.contrib.auth.admin import UserAdmin
+from django.shortcuts import render
+from django.http import HttpResponseRedirect
 
+import logging
+logger = logging.getLogger(__name__)
 
-from .forms import CustomUserCreationForm, CustomUserChangeForm
-
+from .forms import CustomUserCreationForm, CustomUserChangeForm, EmailTemplateSelectForm
+from emails.models import EmailTemplate
 
 CustomUser = get_user_model()
 
@@ -40,9 +44,21 @@ class CustomUserAdmin(UserAdmin):
 
     actions = ['send_email']
 
-    @admin.action(description='Send email')
+    @admin.action(description='Send test email')
     def send_email(self, request, queryset):
-        self.message_user(request, "Sending email to %s" % list(queryset))
+        logger.error("send email")
+        if 'apply' in request.POST:
+            logger.error("Form sent")
+            template = EmailTemplate.objects.get(pk=request.POST['template'])
+            self.message_user(request, "Sending template %s" % template.title)
+            for user in queryset:
+                logger.error("User type: %s" % type(user))
+                logger.error("Template: %s" % template)
+                template.create_email(user)
+            return HttpResponseRedirect(request.get_full_path())
+
+        form = EmailTemplateSelectForm(initial={'_selected_action': queryset.values_list('id', flat=True)})
+        return render(request, 'admin/send_email.html', {'items': queryset, 'form': form})
 
 
 admin.site.register(CustomUser, CustomUserAdmin)

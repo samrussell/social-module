@@ -52,5 +52,28 @@ class SentEmail(models.Model):
         return response
 
 class EmailTemplate(models.Model):
+    INACTIVE = 'IA'
+    ACTIVE = 'AC'
+
+    EMAIL_TEMPLATE_STATUSES = [
+        (INACTIVE, 'Inactive'),
+        (ACTIVE, 'Active'),
+    ]
+
     title = models.CharField(max_length=255)
     template_body = models.TextField()
+    notification_event_digest = models.BooleanField(default=False)
+    notification_group_digest = models.BooleanField(default=False)
+    notification_post_replies = models.BooleanField(default=False)
+    status = models.CharField(max_length=2, choices=EMAIL_TEMPLATE_STATUSES, default=INACTIVE)
+
+    def create_email(self, user):
+        email = SentEmail(from_address='develop@thomasmoore.me', 
+                          to_address=user.email,
+                          subject=self.title,
+                          body=self.template_body
+                          )
+        email.save()
+
+    def __str__(self):
+        return self.title

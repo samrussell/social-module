@@ -20,4 +20,14 @@ class SentEmailAdmin(admin.ModelAdmin):
 
 @admin.register(EmailTemplate)
 class EmailTemplateAdmin(admin.ModelAdmin):
-    list_display = ['title']
+    actions = ['create_email']
+    list_display = ['title', 'status', 'notification_event_digest', 'notification_group_digest', 'notification_post_replies']
+
+    @admin.action(description='Create email')
+    def create_email(self, request, queryset):
+        for template in queryset:
+            try:
+                response = template.send()
+                self.message_user(request, response.text)
+            except:
+                self.message_user(request, 'ERROR: mail %d has already been sent' % template.id, level=messages.ERROR)

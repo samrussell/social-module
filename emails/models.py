@@ -1,9 +1,40 @@
 from django.db import models
+from django.db.models.signals import post_save
+from django.dispatch import receiver
+
+from accounts.models import CustomUser
+from forum.models import Comment
 
 import requests
 import json
 
 # Create your models here.
+
+class SendEmailCommentJob(models.Model):
+    CREATED = 'CR'
+    IN_PROGRESS = 'IP'
+    COMPLETED = 'CO'
+
+    EMAIL_COMMENT_JOB_STATUSES = [
+        (CREATED, 'Created'),
+        (IN_PROGRESS, 'In progress'),
+        (COMPLETED, 'Completed'),
+    ]
+
+    status = models.CharField(max_length=2, choices=EMAIL_COMMENT_JOB_STATUSES, default=CREATED)
+    created_at = models.DateTimeField(auto_now_add=True)
+    started_at = models.DateTimeField(blank=True, null=True)
+    completed_at = models.DateTimeField(blank=True, null=True)
+
+    def run(self):
+        for snippet in self.snippets.all():
+            # build SentEmail from snippet
+            sent_email = snippet.build_email()
+            sent_email.job = self
+            sent_email.save()
+        return True
+        
+
 
 class SentEmail(models.Model):
     UNSENT = 'US'
@@ -21,6 +52,7 @@ class SentEmail(models.Model):
     to_address = models.CharField(max_length=255)
     subject = models.TextField()
     body = models.TextField()
+    job = models.ForeignKey(SendEmailCommentJob, on_delete=models.CASCADE, related_name='sent_emails', blank=True, null=True)
 
     def send(self):
         if self.status != self.UNSENT:
@@ -77,3 +109,46 @@ class EmailTemplate(models.Model):
 
     def __str__(self):
         return self.title
+
+class EmailCommentSnippet(models.Model):
+    UNSENT = 'US'
+    SENT = 'SE'
+
+    EMAIL_SNIPPET_STATUSES = [
+        (UNSENT, 'Unsent'),
+        (SENT, 'Sent'),
+    ]
+
+    text_content = models.TextField()
+    rich_content = models.TextField()
+    
+    user = models.ForeignKey(CustomUser, on_delete=models.CASCADE, related_name='snippets')
+    source = models.ForeignKey(Comment, on_delete=models.CASCADE, related_name='snippets')
+    status = models.CharField(max_length=2, choices=EMAIL_SNIPPET_STATUSES, default=UNSENT)
+    job = models.ForeignKey(SendEmailCommentJob, on_delete=models.CASCADE, related_name='snippets', blank=True, null=True)
+
+    def build_email(self):
+        if self.status != self.UNSENT:
+            raise Exception('Tried to send mail but status is %s' % self.status)
+        
+        email = SentEmail(from_address='develop@thomasmoore.me', 
+                          to_address=self.user.email,
+                          subject="Reply to post %s" % self.source.post.title,
+                          body=self.text_content
+                          )
+        email.save()
+        self.status = self.SENT
+        self.save()
+
+        return email
+
+@receiver(post_save, sender=Comment)
+def create_comment_snippet(sender, instance, **kwargs):
+    snippet = EmailCommentSnippet.objects.create(
+        text_content=instance.body,
+        rich_content=instance.body,
+        user=instance.author,
+        source=instance
+    )
+    snippet.save()
+
